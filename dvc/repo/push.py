@@ -17,19 +17,27 @@ def _rebuild(idx, path, fs, cb):
     items = list(idx.items())
 
     cb.set_size(len(items))
+    file_keys = []
     for key, entry in items:
         if entry.meta and entry.meta.isdir:
-            meta = Meta(isdir=True)
+            new.add(DataIndexEntry(key=key, meta=Meta(isdir=True)))
+            cb.relative_update(1)
         else:
-            try:
-                meta = Meta.from_info(fs.info(fs.join(path, *key)), fs.protocol)
-            except FileNotFoundError:
-                meta = None
+            file_keys.append(key)
 
-        if meta:
-            new.add(DataIndexEntry(key=key, meta=meta))
-
-        cb.relative_update(1)
+    # Remote filesystems answer a batch of info calls concurrently, which
+    # matters when every call is a network round trip.
+    infos = fs.info(
+        [fs.join(path, *key) for key in file_keys],
+        callback=cb,
+        return_exceptions=True,
+    )
+    for key, info in zip(file_keys, infos):
+        if isinstance(info, FileNotFoundError):
+            continue
+        if isinstance(info, Exception):
+            raise info
+        new.add(DataIndexEntry(key=key, meta=Meta.from_info(info, fs.protocol)))
 
     return new
 
