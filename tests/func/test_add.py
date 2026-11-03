@@ -987,6 +987,37 @@ def test_add_does_not_remove_stage_file_on_failure(tmp_dir, dvc, mocker, target)
     assert (tmp_dir / stage.path).read_text() == dvcfile_contents
 
 
+def test_add_file_into_cloud_versioning_dir_without_dir_cache(tmp_dir, dvc):
+    entries = [
+        {
+            "size": 3,
+            "version_id": "WYRG4BglP7pD.gEoJP6a4AqOhl.FRA.h",
+            "etag": "37b51d194a7513e45b56f6524f2d51f2",
+            "md5": "37b51d194a7513e45b56f6524f2d51f2",
+            "relpath": "bar",
+        },
+        {
+            "size": 3,
+            "version_id": "0vL53tFVY5vVAoJ4HG2jCS1mEcohDPE0",
+            "etag": "acbd18db4cc2f85cedef654fccc4a4d8",
+            "md5": "acbd18db4cc2f85cedef654fccc4a4d8",
+            "relpath": "foo",
+        },
+    ]
+    (tmp_dir / "data.dvc").dump(
+        {"outs": [{"path": "data", "hash": "md5", "files": entries}]}
+    )
+    tmp_dir.gen({"data": {"baz": "baz"}})
+
+    dvc.add(os.path.join("data", "baz"))
+
+    assert (tmp_dir / "data.dvc").parse()["outs"][0]["files"] == [
+        entries[0],
+        {"size": 3, "md5": "73feffa4b7f6bb68e44cf984c85f6e88", "relpath": "baz"},
+        entries[1],
+    ]
+
+
 def test_add_updates_to_cloud_versioning_dir(tmp_dir, dvc):
     data_dvc = tmp_dir / "data.dvc"
     data_dvc.dump(

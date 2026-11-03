@@ -1280,17 +1280,25 @@ class Output:
         self.files = None
         self.meta = Meta(size=du(self.cache, merged), nfiles=len(merged))
 
+    def _get_tree_to_update(self) -> "Tree":
+        if not self.hash_info:
+            return Tree()
+        tree = self.get_dir_cache()
+        if tree is None and self.files:
+            # Cloud versioning remotes never store the .dir object, so build the
+            # tree from the files that the .dvc file lists.
+            tree = Tree.from_list(self.files, hash_name=self.hash_name)
+            tree.digest()
+        if tree is None:
+            raise DvcException(f"could not read {self.hash_info.value!r}")
+        return tree
+
     def unstage(self, path: str) -> tuple["Meta", "Tree"]:
         from pygtrie import Trie
 
         rel_key = tuple(self.fs.parts(self.fs.relpath(path, self.fs_path)))
 
-        if self.hash_info:
-            tree = self.get_dir_cache()
-            if tree is None:
-                raise DvcException(f"could not read {self.hash_info.value!r}")
-        else:
-            tree = Tree()
+        tree = self._get_tree_to_update()
 
         trie = tree.as_trie()
         assert isinstance(trie, Trie)
@@ -1319,12 +1327,7 @@ class Output:
         append_only = True
         rel_key = tuple(self.fs.parts(self.fs.relpath(path, self.fs_path)))
 
-        if self.hash_info:
-            tree = self.get_dir_cache()
-            if tree is None:
-                raise DvcException(f"could not read {self.hash_info.value!r}")
-        else:
-            tree = Tree()
+        tree = self._get_tree_to_update()
 
         trie = tree.as_trie()
         assert isinstance(trie, Trie)
